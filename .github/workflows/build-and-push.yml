@@ -1,0 +1,56 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/my-node-app
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+
+      # 1) Pega o código
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2) (Opcional mas recomendado) habilita QEMU para builds multi-arch
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      # 3) Habilita o buildx (build avançado do Docker)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 4) Loga no GHCR (usa o GITHUB_TOKEN com as permissões acima)
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 5) Build e push usando build-push-action (com cache remoto)
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:cache,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      # 6) (Opcional) Output do nome da imagem usada — útil para debug
+      - name: Show pushed image
+        run: echo "Pushed images: $IMAGE_NAME:${{ github.sha }} and $IMAGE_NAME:latest"
